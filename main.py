@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -38,6 +40,8 @@ class DroneCoordinates(BaseModel):
     latitude: float
     longitude: float
     altitude: float
+    battery: int = 100
+    status: str = "airborne"
 
 
 @app.get("/api/health")
@@ -47,10 +51,12 @@ def health():
 
 @app.post("/api/telemetry")
 def receive_telemetry(data: DroneCoordinates):
-    drone_telemetry.append(data.model_dump())
-    return {"message": "Telemetry received"}
+    entry = data.model_dump()
+    entry["timestamp"] = datetime.now(timezone.utc).isoformat()
+    drone_telemetry.append(entry)
+    return {"message": "Telemetry received", "drone_id": data.drone_id}
 
 
 @app.get("/api/drones/status")
 def drones_status():
-    return drone_telemetry
+    return {"count": len(drone_telemetry), "drones": drone_telemetry}
