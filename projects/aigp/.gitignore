@@ -1,0 +1,10 @@
+aigp-env/
+ADRL/
+__pycache__/
+*.pyc
+*.db
+.env
+camera_frames/
+camera_test/
+*.png
+race_log_*.csv
