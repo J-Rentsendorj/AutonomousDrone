@@ -38,6 +38,51 @@ async function apiPost(endpoint, body) {
 
 // ---- API Endpoints ----
 
+// Map backend flight_quality.json shape to frontend flightQuality shape
+function mapFlightQuality(raw) {
+  const offsets = raw.passage_offsets || {};
+  const gateIds = Object.keys(offsets).map(Number).sort((a, b) => a - b);
+  const gates = gateIds.map(id => {
+    const o = offsets[String(id)];
+    return {
+      id,
+      offset: o.total,
+      lateral: o.lateral,
+      vertical: o.vertical,
+      crossTrack: 0, // per-gate cross-track not in backend data
+    };
+  });
+
+  const totals = gates.map(g => g.offset);
+  const avgOffset = totals.length ? totals.reduce((a, b) => a + b, 0) / totals.length : 0;
+  const cts = raw.cross_track_summary || {};
+
+  // Enrich per-gate cross-track from timeseries if available
+  if (raw.cross_track_timeseries) {
+    const byGate = {};
+    for (const pt of raw.cross_track_timeseries) {
+      if (!byGate[pt.gate]) byGate[pt.gate] = [];
+      byGate[pt.gate].push(pt.error);
+    }
+    for (const g of gates) {
+      const samples = byGate[g.id];
+      if (samples) g.crossTrack = samples.reduce((a, b) => a + b, 0) / samples.length;
+    }
+  }
+
+  return {
+    gatesPassed: gates.length,
+    totalGates: 12, // fixed for ADRL Soccer Field
+    flightTime: 0,  // not tracked in flight_quality.json
+    avgPassageOffset: avgOffset,
+    avgCrossTrack: cts.avg || 0,
+    maxCrossTrack: cts.max || 0,
+    stuckEvents: (raw.stuck_events || []).length,
+    yoloMaP: 0, // not in backend data
+    gates,
+  };
+}
+
 window.ApiService = {
   // Fetch all runs
   getRuns: () => apiFetch('/runs'),
@@ -56,6 +101,15 @@ window.ApiService = {
 
   // Create a new run
   createRun: (payload) => apiPost('/runs', payload),
+
+  // Fetch flight quality data (mapped to frontend shape)
+  getFlightQuality: async () => {
+    const result = await apiFetch('/quality/latest');
+    if (result.data && !result.error) {
+      result.data = mapFlightQuality(result.data);
+    }
+    return result;
+  },
 
   // Health check
   health: () => apiFetch('/health'),

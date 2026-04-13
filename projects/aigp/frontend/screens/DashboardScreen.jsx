@@ -9,22 +9,31 @@ window.DashboardScreen = function DashboardScreen({ onNavigate, addToast }) {
   const [loading, setLoading] = React.useState(true);
   const [apiConnected, setApiConnected] = React.useState(false);
   const [selectedGate, setSelectedGate] = React.useState(null);
+  const [fq, setFq] = React.useState(window.MockData.flightQuality);
 
-  const fq = window.MockData.flightQuality;
   const traj = window.MockData.trajectory;
 
-  // Attempt to load runs from API on mount
+  // Attempt to load runs and flight quality from API on mount
   React.useEffect(() => {
     async function load() {
-      const { data, error } = await window.ApiService.getRuns();
-      if (data && !error) {
-        setRuns(data);
+      const [runsResult, qualityResult] = await Promise.all([
+        window.ApiService.getRuns(),
+        window.ApiService.getFlightQuality(),
+      ]);
+
+      if (runsResult.data && !runsResult.error) {
+        setRuns(runsResult.data);
         setApiConnected(true);
       } else {
-        // Fall back to mock data
         setRuns(window.MockData.runs);
-        setApiConnected(false);
       }
+
+      if (qualityResult.data && !qualityResult.error) {
+        setFq(qualityResult.data);
+        setApiConnected(true);
+      }
+      // If quality API fails, fq stays as MockData fallback
+
       setLoading(false);
     }
     load();
